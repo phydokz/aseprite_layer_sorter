@@ -2,7 +2,7 @@
     "name": "aseprite_layers_sorter",
     "displayName": "Aseprite Layer Sorter",
     "description": "Sort layers by name using cell's z-index property",
-    "version": "0.1",
+    "version": "1.0",
     "author": { 
         "name": "Pablo Henrick Diniz",
         "email": "phydokz@gmail.com"
