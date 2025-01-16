@@ -1,6 +1,6 @@
 {
-    "name": "layers_sorter",
-    "displayName": "Aseprite Layer Sorting",
+    "name": "aseprite_layer_sorter",
+    "displayName": "Aseprite Layer Sorer",
     "description": "Sort layers by name using cell's z-index property",
     "version": "0.1",
     "author": { 
