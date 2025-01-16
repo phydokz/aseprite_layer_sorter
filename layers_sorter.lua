@@ -1,4 +1,4 @@
-local plugin_key = "phydokz/aseprite_layers_sorter"
+local plugin_key = "phydokz/layers_sorter"
 local dlg
 local sitechange
 local last_sprite = app.activeSprite
