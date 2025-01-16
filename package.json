@@ -1,0 +1,19 @@
+{
+    "name": "layers_sorter",
+    "displayName": "Aseprite Layer Sorting",
+    "description": "Sort layers by name using cell's z-index property",
+    "version": "0.1",
+    "author": { 
+        "name": "Pablo Henrick Diniz",
+        "email": "phydokz@gmail.com"
+     },
+    "contributors": [ ],
+    "publisher": "phydokz",
+    "license": "CC-BY-4.0",
+    "categories": [ "Scripts" ],
+    "contributes": {
+      "scripts": [
+          { "path": "./sorter.lua" }
+      ]
+    }
+  }
