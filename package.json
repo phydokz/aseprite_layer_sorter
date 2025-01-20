@@ -2,7 +2,7 @@
     "name": "layers_sorter",
     "displayName": "Layers Sorter",
     "description": "Sort layers by name using cell's z-index property",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "author": { 
         "name": "Pablo Henrick Diniz",
         "email": "phydokz@gmail.com"

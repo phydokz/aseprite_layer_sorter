@@ -33,8 +33,11 @@ local plugin_key = "phydokz/layers_sorter"
 local dlg
 local sitechange
 local aftercommand
-local last_sprite = app.activeSprite
+local last_sprite = app.sprite
 local sprites = {}
+local rows = 0
+local ui_state = {}
+local refreshing = false
 
 
 -- Initialization function for the plugin
@@ -77,13 +80,34 @@ function init(plugin)
          end
      end
 
-         -- Function to check if an object is a layer (using its string representation)
+     -- hash function
+     local function hash(str)
+        local h = 5381;
+    
+        for c in str:gmatch"." do
+            h = ((h << 5) + h) + string.byte(c)
+        end
+        return h
+    end
+
+    -- generate sprite id for control
+    local function getSpriteId(sprite)
+        local id = sprite.properties(plugin_key).id
+        if id == nil then
+            id = os.time() .. "_" .. tostring(math.random(1000, 9999))
+            sprite.properties(plugin_key).id = id
+        end
+
+        return id
+    end
+
+   -- Function to check if an object is a layer (using its string representation)
     local function is_layer(layer)
         -- Check if the string representation of the object contains "Layer:"
         return string.find(tostring(layer), "Layer:") ~= nil
     end
     
-        -- Function to get the full name of a layer, including parent layers if any
+    -- Function to get the full name of a layer, including parent layers if any
     local function get_layer_name(layer)
         local name = layer.name
         
@@ -95,10 +119,11 @@ function init(plugin)
         -- Return the full name of the layer
         return name
     end
-
+    
+    --Retrieve layer by name
     local function get_layer_by_name(name)
         local l = nil
-        iterate_layers(app.activeSprite.layers,function(layer)
+        iterate_layers(app.sprite.layers,function(layer)
             if get_layer_name(layer) == name then
                 l = layer
                 return false
@@ -110,7 +135,7 @@ function init(plugin)
    -- Function to collect layers recursively from the active sprite
     local function get_layers()
         -- If no active sprite exists, return an empty table
-        if not app.activeSprite then return {} end
+        if not app.sprite then return {} end
 
         local layers = {}
 
@@ -120,11 +145,12 @@ function init(plugin)
         end
 
         -- Use the iterate_layers function to gather layers from the active sprite
-        iterate_layers(app.activeSprite.layers, get_layer)
+        iterate_layers(app.sprite.layers, get_layer)
         
         return layers
     end
 
+    -- get layers names
     local function get_layers_names(layers)
         local names = {}
         for _,layer in ipairs(layers) do
@@ -146,7 +172,7 @@ function init(plugin)
         return -1
     end
 
-
+    -- get sprite id
     function getSpriteId(sprite)
         local index = index_of(sprites,sprite)
         if index == -1 then
@@ -187,10 +213,10 @@ function init(plugin)
     -- Function to update the sorted layers based on the sort properties
     local function update_sorted_layers()
         -- If no active sprite exists, return an empty table
-        if not app.activeSprite then return {} end
+        if not app.sprite then return {} end
 
         -- Get the current frame number as a string
-        local frame = tostring(app.activeFrame.frameNumber)
+        local frame = tostring(app.frame.frameNumber)
 
         -- Retrieve all layers
         local layers = get_layers()
@@ -212,7 +238,7 @@ function init(plugin)
 
         local names =  get_layers_names(sorted_layers)
 
-        app.activeSprite.properties(plugin_key).sorted_layers = names
+        app.sprite.properties(plugin_key).sorted_layers = names
 
         -- Update the layers' sort properties with the new sorted order
         for index, layer in ipairs(sorted_layers) do
@@ -223,7 +249,7 @@ function init(plugin)
             for key, _ in pairs(sort) do
                 local num = tonumber(key)
                 -- If the frame number is greater than the total number of frames, remove it
-                if num > #app.activeSprite.frames then
+                if num > #app.sprite.frames then
                     sort[key] = nil
                 end
             end
@@ -239,10 +265,10 @@ function init(plugin)
     local function update_cell_zindexes()
         -- Retrieve all layers from the active sprite
         local layers_names = get_layers_names(get_layers())
-        local sorted_layers_names = app.activeSprite.properties(plugin_key).sorted_layers or {}
+        local sorted_layers_names = app.sprite.properties(plugin_key).sorted_layers or {}
         
         -- Get the current frame number
-        local frame = app.activeFrame.frameNumber
+        local frame = app.frame.frameNumber
         
         -- Inner function to process each layer and update the z-index of its cells
         local function processLayer(layer)
@@ -264,8 +290,8 @@ function init(plugin)
         end
         
         -- If there's an active sprite, process its layers
-        if app.activeSprite then 
-            iterate_layers(app.activeSprite.layers, processLayer) 
+        if app.sprite then 
+            iterate_layers(app.sprite.layers, processLayer) 
         end
         
         -- Refresh the app to apply the changes
@@ -275,7 +301,7 @@ function init(plugin)
     -- Function to swap two layers by their indices in the sorted layers list
     local function swap_layers(i, j)
         app.transaction('swap layers',function()
-            local sorted_layers_names = app.activeSprite.properties(plugin_key).sorted_layers or {}
+            local sorted_layers_names = app.sprite.properties(plugin_key).sorted_layers or {}
 
            -- Retrieve all layers
            local layers_names = get_layers_names(get_layers())
@@ -285,7 +311,7 @@ function init(plugin)
            -- If both layers are valid (i.e., exist in the layers list)
            if index_of(layers_names, layer1_name) ~= -1 and index_of(layers_names, layer2_name) ~= -1 then
                -- Get the current frame number as a string
-               local frame = tostring(app.activeFrame.frameNumber)
+               local frame = tostring(app.frame.frameNumber)
 
 
                local layer1 = get_layer_by_name(layer1_name)
@@ -316,31 +342,35 @@ function init(plugin)
          refresh_dialog()
     end
 
+    --update dialog
     function refresh_dialog()
-        local currentFrame = app.activeFrame.frameNumber  -- Get the current frame number
-        if dlg ~= nil then
+        if refreshing then return end
+        refreshing = true
+
+        local currentFrame = app.frame.frameNumber  -- Get the current frame number
+
+        if dlg == nil then
+            dlg = Dialog { 
+                title = "Layer Order for Frame #" .. tostring(currentFrame),
+                onclose = on_dialog_close  -- Set the onclose event to save the position when the dialog closes
+            }
+        else
             dlg:close()
+            visible = true
+
+            dlg:modify{
+                title = "Layer Order for Frame #" .. tostring(currentFrame),
+            }
         end
 
-        visible = true
 
-        dlg = Dialog { 
-            title = "Layer Order for Frame #" .. tostring(currentFrame),
-            onclose = on_dialog_close  -- Set the onclose event to save the position when the dialog closes
-        }
-
-
-        local sorted_layers_names = app.activeSprite.properties(plugin_key).sorted_layers or {}
+        local sorted_layers_names = app.sprite.properties(plugin_key).sorted_layers or {}
+        local sprite_id = getSpriteId(app.sprite)
 
          -- Modify the dialog with the added layers
          for index, name in ipairs(sorted_layers_names) do
             local id = tostring(index)
-
-            -- Add separator for the new layer
-            --dlg:label{
-               -- id = "separator_" .. id,
-               -- text = name
-            --}
+            local state_hash = hash(id..'_'..name..'_'..sprite_id)
 
             -- Define functions for moving the new layer up or down
             local function move_up()
@@ -355,40 +385,80 @@ function init(plugin)
                 end
             end
 
-            -- Add buttons for moving the new layer up or down
-            dlg:button{
-                label=name,
-                id = "move_up_" .. id,
-                text = "▲",
-                onclick = move_up
-            }
+            if index <= rows then
+                if ui_state[id] ~= state_hash then
+                     -- modify layers
+                    dlg:modify{
+                        id = "move_up_" .. id,
+                        label=name,
+                        onclick = move_up,
+                        visible=true
+                    }
 
-            dlg:button{
-                id = "move_down_" .. id,
-                text = "▼",
-                onclick = move_down
-            }
+                    dlg:modify{
+                        id = "move_down_" .. id,
+                        onclick = move_down,
+                        visible=true
+                    }
+                end
+            else
+                -- Add buttons for moving the new layer up or down
+                dlg:button{
+                    label=name,
+                    id = "move_up_" .. id,
+                    text = "▲",
+                    onclick = move_up
+                }
 
-            dlg:newrow({always = false})
+                dlg:button{
+                    id = "move_down_" .. id,
+                    text = "▼",
+                    onclick = move_down
+                }
+                dlg:newrow({always = false})
+                rows = math.max(rows,index)
+            end
+
+            ui_state[id] = state_hash
         end
 
-         -- Show the dialog with the updated bounds and options
-         dlg:show{
+        for index=#sorted_layers_names+1, rows do
+            local id = tostring(index)
+
+            dlg:modify{
+                id = "move_up_" .. id,
+                visible=false
+            }
+
+            dlg:modify{
+                id = "move_down_" .. id,
+                visible=false
+            }
+
+            ui_state[id] = nil
+        end
+
+        dlg:show{
             wait = false,
             autoscrollbars = true,
             bounds = Rectangle(plugin.preferences.dialog_x, plugin.preferences.dialog_y, 300, 300)
         }
+       
+        refreshing = false
     end
 
+
     -- Function to refresh the dialog when something changes (e.g., sprite or frame changes)
-    sitechange = function()
+    sitechange = function(ev)
         -- If there is an active sprite and frame, and it's the same as the last sprite, refresh the dialog
-        if app.activeSprite ~= nil and app.activeFrame ~= nil and app.activeSprite == last_sprite then
+        if app.sprite and app.frame and app.sprite == last_sprite then
             if visible then
-                app.transaction('sort layers',function()
-                    update_sorted_layers()
-                    update_cell_zindexes()
-                end)
+                if ev.fromUndo == false then
+                    app.transaction('sort layers',function()
+                        update_sorted_layers()
+                        update_cell_zindexes()
+                    end)
+                end
                 refresh_dialog()
             end
         else
@@ -398,14 +468,14 @@ function init(plugin)
         end
 
         -- Update the last sprite to the current one
-        last_sprite = app.activeSprite
+        last_sprite = app.sprite
     end
 
     aftercommand = function(ev)
         if ev.name == "Undo" or ev.name == "Redo" then
             if visible  then
                 refresh_dialog()
-            end            
+            end         
         end
     end
 
@@ -415,17 +485,16 @@ function init(plugin)
         title = "Sort Layers",
         group = "frame_popup_properties",
         onclick = function()
-            visible = true
-
             app.transaction('sort layers',function()
                 update_sorted_layers()
                 update_cell_zindexes()
             end)
           
+            visible = true
             refresh_dialog()  -- Open the dialog when the command is triggered
         end,
         onenabled = function()
-            return app.activeSprite ~= nil and app.activeFrame ~= nil  -- Enable the command if there is an active sprite and frame
+            return app.sprite ~= nil and app.frame ~= nil  -- Enable the command if there is an active sprite and frame
         end
     }
 
@@ -439,19 +508,14 @@ function exit(plugin)
     -- If the dialog exists, close it and set it to nil
     if dlg ~= nil then
         dlg:close()  -- Close the dialog
-        dlg = nil  -- Clear the reference to the dialog
     end
 
     -- If the 'sitechange' event listener is active, remove it and set it to nil
     if sitechange then
         app.events:off(sitechange)  -- Remove the event listener
-        sitechange = nil
     end
 
     if aftercommand then
         app.events.off(aftercommand)
-        aftercommand = nil
     end
-
-    last_sprite = nil
 end
