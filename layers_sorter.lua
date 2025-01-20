@@ -242,7 +242,7 @@ function init(plugin)
 
         -- Update the layers' sort properties with the new sorted order
         for index, layer in ipairs(sorted_layers) do
-            local sort = layer.properties(plugin_key).sort
+            local sort = layer.properties(plugin_key).sort or {}
             sort[frame] = index
 
             -- Remove deleted frames from the layer's sorting data
