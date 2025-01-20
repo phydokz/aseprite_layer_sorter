@@ -380,7 +380,8 @@ function init(plugin)
             end
             
             local function move_down()
-                if index < #sorted_layers_names then
+                local sorted = app.sprite.properties(plugin_key).sorted_layers or {}
+                if index < #sorted then
                     swap_layers(index, index + 1)
                 end
             end
