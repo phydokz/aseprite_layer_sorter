@@ -318,8 +318,8 @@ function init(plugin)
                local layer2 = get_layer_by_name(layer2_name)
                
                -- Retrieve the sorting properties for both layers
-               local sortA = layer1.properties(plugin_key).sort
-               local sortB = layer2.properties(plugin_key).sort
+               local sortA = layer1.properties(plugin_key).sort or {}
+               local sortB = layer2.properties(plugin_key).sort or {}
                
                -- Swap the sort values for the current frame between the two layers
                local tmp = sortA[frame]
